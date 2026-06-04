@@ -1,1 +1,47 @@
+import os
+import numpy as np
+import pandas as pd
+import pickle
+from sklearn.ensemble import RandomForestClassifier
 
+# Ensure directories exist
+os.makedirs("data", exist_ok=True)
+os.makedirs("models", exist_ok=True)
+
+# 1. Generate synthetic predictive maintenance dataset (10,000 instances)
+np.random.seed(42)
+n_rows = 10000
+
+data = {
+    "UDI": range(1, n_rows + 1),
+    "Product ID": [f"{np.random.choice(['L', 'M', 'H'])}{np.random.randint(10000, 99999)}" for _ in range(n_rows)],
+    "Type": np.random.choice(["L", "M", "H"], size=n_rows, p=[0.6, 0.3, 0.1]),
+    "Air temperature [K]": np.random.normal(300, 2, n_rows),
+    "Process temperature [K]": np.random.normal(310, 1, n_rows),
+    "Rotational speed [rpm]": np.random.normal(1500, 150, n_rows),
+    "Torque [Nm]": np.random.normal(40, 10, n_rows),
+    "Tool wear [min]": np.random.randint(0, 250, size=n_rows),
+}
+
+df = pd.DataFrame(data)
+
+# Create deterministic machine failure profiles based on physics rules
+df["Target"] = 0
+# Failure conditions (e.g., high heat combination or severe overstrain)
+df.loc[(df["Torque [Nm]"] * df["Tool wear [min]"] > 11000), "Target"] = 1
+df.loc[(df["Process temperature [K]"] - df["Air temperature [K]"] < 8.6) & (df["Rotational speed [rpm]"] < 1380), "Target"] = 1
+
+# Save dataset
+df.to_csv("data/predictive_maintenance.csv", index=False)
+print("✅ Created: data/predictive_maintenance.csv")
+
+# 2. Pre-train and serialize a Random Forest classifier
+X = df[["Air temperature [K]", "Process temperature [K]", "Rotational speed [rpm]", "Torque [Nm]", "Tool wear [min]"]]
+y = df["Target"]
+
+model = RandomForestClassifier(n_estimators=50, random_state=42)
+model.fit(X, y)
+
+with open("models/maintenance_model.pkl", "wb") as f:
+    pickle.dump(model, f)
+print("✅ Created: models/maintenance_model.pkl")
